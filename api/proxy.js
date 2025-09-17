@@ -1,24 +1,27 @@
-import express from "express";
 import fetch from "node-fetch";
 import { Connection, Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 
-const app = express();
-app.use(express.json());
-
-const RPC_URL = "https://ancient-twilight-reel.solana-mainnet.quiknode.pro/"; // your QuickNode RPC
-const TIP_ADDRESS = "CHJPZWYoHMkTFtDq75Jmy6FLFcHD5kJhGziBgiNSfmLE"; // replace with your tip wallet
-const TIP_AMOUNT_SOL = 0.002;
-
-// Vercel injects env secrets via process.env
-const secret = JSON.parse(process.env.TIPPER_SECRET);
-const tipper = Keypair.fromSecretKey(Uint8Array.from(secret));
-const connection = new Connection(RPC_URL);
-
-app.post("/", async (req, res) => {
-  const { method, params, id } = req.body;
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
   try {
-    // Forward everything except sendTransaction
+    const { method, params, id } = req.body;
+
+    const RPC_URL = "https://ancient-twilight-reel.solana-mainnet.quiknode.pro/";
+    const TIP_ADDRESS = "CHJPZWYoHMkTFtDq75Jmy6FLFcHD5kJhGziBgiNSfmLE";
+    const TIP_AMOUNT_SOL = 0.002;
+
+    // ✅ Parse secret from env
+    if (!process.env.TIPPER_SECRET) {
+      throw new Error("Missing TIPPER_SECRET env");
+    }
+    const secret = JSON.parse(process.env.TIPPER_SECRET);
+    const tipper = Keypair.fromSecretKey(Uint8Array.from(secret));
+    const connection = new Connection(RPC_URL);
+
+    // Forward all non-sendTransaction calls
     if (method !== "sendTransaction") {
       const resp = await fetch(RPC_URL, {
         method: "POST",
@@ -29,7 +32,7 @@ app.post("/", async (req, res) => {
       return res.json(data);
     }
 
-    // 1. Forward original signed tx
+    // 1. Forward the signed tx
     const forwardResp = await fetch(RPC_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -37,7 +40,7 @@ app.post("/", async (req, res) => {
     });
     const forwardJson = await forwardResp.json();
 
-    // 2. Build + send tip tx
+    // 2. Send tip transaction
     const blockhash = await connection.getLatestBlockhash();
     const tipTx = new Transaction({
       feePayer: tipper.publicKey,
@@ -52,7 +55,7 @@ app.post("/", async (req, res) => {
 
     const tipSig = await connection.sendTransaction(tipTx, [tipper]);
 
-    res.json({
+    return res.json({
       jsonrpc: "2.0",
       id,
       result: forwardJson.result,
@@ -60,8 +63,6 @@ app.post("/", async (req, res) => {
     });
   } catch (err) {
     console.error("Proxy Error:", err);
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
-});
-
-export default app;
+}
