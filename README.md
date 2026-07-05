@@ -1,7 +1,5 @@
 # hello-world
 
-AsSalamalaykum
+In the Name of Allah Most Beneficent Most Merciful.
 
-I'm Abubakar
-
-Interested in building decentralized apps (DApps)
+I'm interested in building decentralized apps (DApps)
